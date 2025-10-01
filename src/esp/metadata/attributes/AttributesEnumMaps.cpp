@@ -15,7 +15,8 @@ const std::map<std::string, AssetType> AssetTypeNamesMap = {
     {"mp3d", AssetType::Mp3dMesh},
     {"semantic", AssetType::InstanceMesh},
     {"navmesh", AssetType::Navmesh},
-    {"primitive", AssetType::Primitive}};
+    {"primitive", AssetType::Primitive},
+    {"gaussian_splatting", AssetType::GaussianSplatting}};
 
 std::string getAssetTypeName(AssetType assetTypeEnum) {
   // this verifies that enum value being checked is supported by string-keyed

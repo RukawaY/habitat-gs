@@ -56,9 +56,16 @@ enum SupportedMeshType {
   GENERIC_MESH = 1,
 
   /**
+   * @brief 3D Gaussian Splatting data loaded from .ply files containing
+   * Gaussian parameters (position, normal, SH coefficients, opacity, scale,
+   * rotation). Object is likely type @ref GaussianSplattingData.
+   */
+  GAUSSIAN_SPLATTING = 2,
+
+  /**
    * @brief Number of enumerated supported types.
    */
-  NUM_SUPPORTED_MESH_TYPES = 2,
+  NUM_SUPPORTED_MESH_TYPES = 3,
 };
 
 /**

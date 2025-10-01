@@ -1083,6 +1083,11 @@ class ResourceManager {
   bool loadRenderAssetGeneral(const AssetInfo& info);
 
   /**
+   * @brief 3D Gaussian Splatting backend for loadRenderAsset
+   */
+  bool loadRenderAssetGaussianSplatting(const AssetInfo& info);
+
+  /**
    * @brief Create a render asset instance.
    *
    * @param creation Controls how the instance is created.
@@ -1282,6 +1287,11 @@ class ResourceManager {
    * @brief Importer used to load images (AnyImageImporter)
    */
   Corrade::Containers::Pointer<Importer> imageImporter_;
+
+  /**
+   * @brief Importer used to load 3D Gaussian Splatting PLY files
+   */
+  Corrade::Containers::Pointer<Importer> gaussianSplattingImporter_;
 
   /**
    * @brief Reference to the currently loaded semanticScene Descriptor

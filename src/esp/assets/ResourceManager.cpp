@@ -79,6 +79,8 @@
 #include "CollisionMeshData.h"
 #include "GenericMeshData.h"
 #include "GenericSemanticMeshData.h"
+#include "GaussianSplattingData.h"
+#include "GaussianSplattingImporter.h"
 #include "MeshData.h"
 
 // This is to import the "resources" at runtime. When the resource is
@@ -159,6 +161,10 @@ void ResourceManager::buildImporters() {
   // instantiate importer for image load
   CORRADE_INTERNAL_ASSERT_OUTPUT(
       imageImporter_ = importerManager_.loadAndInstantiate("AnyImageImporter"));
+
+  // instantiate custom importer for 3D Gaussian Splatting
+  gaussianSplattingImporter_ = Corrade::Containers::Pointer<Importer>(
+      new GaussianSplattingImporter());
 
   // set quiet importer flags if asset logging is quieted
   if (!isLevelEnabled(logging::Subsystem::assets,
@@ -822,6 +828,10 @@ bool ResourceManager::loadRenderAsset(const AssetInfo& info) {
       ESP_DEBUG(Mn::Debug::Flag::NoSpace)
           << "Loading Semantic Mesh asset named `" << info.filepath << "`.";
       meshSuccess = loadSemanticRenderAsset(defaultInfo);
+    } else if (info.type == AssetType::GaussianSplatting) {
+      ESP_DEBUG(Mn::Debug::Flag::NoSpace)
+          << "Loading 3D Gaussian Splatting asset named `" << info.filepath << "`.";
+      meshSuccess = loadRenderAssetGaussianSplatting(defaultInfo);
     } else if (isRenderAssetGeneral(info.type)) {
       ESP_DEBUG(Mn::Debug::Flag::NoSpace)
           << "Loading general asset named `" << info.filepath << "`.";
@@ -1646,6 +1656,97 @@ bool ResourceManager::loadRenderAssetGeneral(const AssetInfo& info) {
 
   return true;
 }  // ResourceManager::loadRenderAssetGeneral
+
+bool ResourceManager::loadRenderAssetGaussianSplatting(const AssetInfo& info) {
+  CORRADE_INTERNAL_ASSERT(info.type == AssetType::GaussianSplatting);
+
+  const std::string& filename = info.filepath;
+  CORRADE_INTERNAL_ASSERT(resourceDict_.count(filename) == 0);
+
+  ESP_CHECK(gaussianSplattingImporter_->openFile(filename),
+            Cr::Utility::formatString(
+                "Error loading 3D Gaussian Splatting data from file '{}'",
+                filename));
+
+  // Load file and add it to the dictionary
+  LoadedAssetData loadedAssetData{info, {}};
+
+  // Get the Gaussian count from the importer
+  auto* gsImporter = dynamic_cast<GaussianSplattingImporter*>(
+      gaussianSplattingImporter_.get());
+  CORRADE_INTERNAL_ASSERT(gsImporter);
+
+  size_t gaussianCount = gsImporter->getGaussianCount();
+  ESP_DEBUG() << "Loaded" << gaussianCount
+              << "Gaussians from 3DGS PLY file:" << filename;
+
+  // Create GaussianSplattingData and populate it
+  auto gaussianData = std::make_unique<GaussianSplattingData>();
+  gaussianData->reserve(gaussianCount);
+
+  const auto& positions = gsImporter->getPositions();
+  const auto& normals = gsImporter->getNormals();
+  const auto& sh_dc = gsImporter->getSHDC();
+  const auto& sh_rest = gsImporter->getSHRest();
+  const auto& opacities = gsImporter->getOpacities();
+  const auto& scales = gsImporter->getScales();
+  const auto& rotations = gsImporter->getRotations();
+
+  // Build bounding box
+  Magnum::Range3D boundingBox;
+  bool firstPoint = true;
+
+  for (size_t i = 0; i < gaussianCount; ++i) {
+    GaussianSplat splat;
+    splat.position = positions[i];
+    splat.normal = normals[i];
+    splat.f_dc = sh_dc[i];
+    splat.opacity = opacities[i];
+    splat.scale = scales[i];
+    splat.rotation = rotations[i];
+
+    // Copy SH rest coefficients
+    splat.f_rest = Corrade::Containers::Array<float>(sh_rest[i].size());
+    for (size_t j = 0; j < sh_rest[i].size(); ++j) {
+      splat.f_rest[j] = sh_rest[i][j];
+    }
+
+    gaussianData->addGaussian(splat);
+
+    // Update bounding box
+    if (firstPoint) {
+      boundingBox = Magnum::Range3D{positions[i], positions[i]};
+      firstPoint = false;
+    } else {
+      boundingBox = Magnum::Math::join(boundingBox,
+                                       Magnum::Range3D{positions[i], positions[i]});
+    }
+  }
+
+  gaussianData->BB = boundingBox;
+
+  // Upload to GPU if renderer is enabled
+  if (getCreateRenderer()) {
+    gaussianData->uploadBuffersToGPU(false);
+  }
+
+  // Store in meshes_ with a unique ID
+  int meshID = nextMeshID_++;
+  loadedAssetData.meshMetaData.setMeshIndices(meshID, meshID);
+  meshes_.emplace(meshID, std::move(gaussianData));
+
+  // Create a simple hierarchy with one root node
+  loadedAssetData.meshMetaData.root.meshIDLocal = 0;
+  loadedAssetData.meshMetaData.root.componentID = 0;
+
+  auto inserted = resourceDict_.emplace(filename, std::move(loadedAssetData));
+  loadedAssetData.meshMetaData.setRootFrameOrientation(info.frame);
+
+  ESP_DEBUG() << "Successfully loaded 3D Gaussian Splatting asset:" << filename
+              << "with bounding box" << boundingBox;
+
+  return true;
+}  // ResourceManager::loadRenderAssetGaussianSplatting
 
 scene::SceneNode* ResourceManager::createRenderAssetInstanceGeneralPrimitive(
     const RenderAssetInstanceCreationInfo& creation,

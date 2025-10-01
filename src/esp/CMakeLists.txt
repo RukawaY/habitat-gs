@@ -257,6 +257,10 @@ set(
   assets/GenericSemanticMeshData.h
   assets/GenericMeshData.cpp
   assets/GenericMeshData.h
+  assets/GaussianSplattingData.cpp
+  assets/GaussianSplattingData.h
+  assets/GaussianSplattingImporter.cpp
+  assets/GaussianSplattingImporter.h
   assets/MeshData.h
   assets/MeshMetaData.h
   assets/RenderAssetInstanceCreationInfo.cpp

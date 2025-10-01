@@ -26,6 +26,7 @@ enum class AssetType {
   InstanceMesh,
   Navmesh,
   Primitive,
+  GaussianSplatting,
   EndAssetType,
 };
 

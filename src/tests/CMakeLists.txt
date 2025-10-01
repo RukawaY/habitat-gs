@@ -92,6 +92,14 @@ target_include_directories(DrawableTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 corrade_add_test(GeoTest GeoTest.cpp LIBRARIES habitat_sim)
 
 corrade_add_test(
+  GaussianImportTest
+  GaussianImportTest.cpp
+  LIBRARIES
+  habitat_sim
+)
+target_include_directories(GaussianImportTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+corrade_add_test(
   GfxBatchHbaoTest
   GfxBatchHbaoTest.cpp
   LIBRARIES
