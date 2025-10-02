@@ -265,6 +265,8 @@ void GaussianRasterizer::render(
       viewmat, projmat, cam_pos, tan_fovx, tan_fovy,
       false,                                           // prefiltered
       d_colorOutput,                                   // out_color
+      d_depthOutput,                                   // depth (now supported!)
+      false,                                           // antialiasing
       nullptr,                                         // radii
       false);                                          // debug
 
@@ -273,10 +275,7 @@ void GaussianRasterizer::render(
       colorArray, 0, 0, d_colorOutput, W * 3 * sizeof(float),
       W * 3 * sizeof(float), H, cudaMemcpyDeviceToDevice));
 
-  // For depth, we need to extract it from the rasterizer
-  // For now, we'll set depth to a placeholder (the rasterizer doesn't directly output depth)
-  // TODO: Modify CUDA kernel to also output depth
-  CUDA_CHECK(cudaMemset(d_depthOutput, 0, W * H * sizeof(float)));
+  // Copy depth output to OpenGL texture via CUDA array
   CUDA_CHECK(cudaMemcpy2DToArray(
       depthArray, 0, 0, d_depthOutput, W * sizeof(float),
       W * sizeof(float), H, cudaMemcpyDeviceToDevice));
