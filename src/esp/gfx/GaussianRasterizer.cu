@@ -120,6 +120,7 @@ struct GaussianRasterizer::Impl {
       if (d_positions) cudaFree(d_positions);
       if (d_normals) cudaFree(d_normals);
       if (d_sh_dc) cudaFree(d_sh_dc);
+      if (d_sh_rest) cudaFree(d_sh_rest);
       if (d_opacities) cudaFree(d_opacities);
       if (d_scales) cudaFree(d_scales);
       if (d_rotations) cudaFree(d_rotations);
@@ -127,6 +128,7 @@ struct GaussianRasterizer::Impl {
       CUDA_CHECK(cudaMalloc(&d_positions, P * 3 * sizeof(float)));
       CUDA_CHECK(cudaMalloc(&d_normals, P * 3 * sizeof(float)));
       CUDA_CHECK(cudaMalloc(&d_sh_dc, P * 3 * sizeof(float)));
+      CUDA_CHECK(cudaMalloc(&d_sh_rest, P * 45 * sizeof(float)));  // 45 higher-order SH coefficients
       CUDA_CHECK(cudaMalloc(&d_opacities, P * sizeof(float)));
       CUDA_CHECK(cudaMalloc(&d_scales, P * 3 * sizeof(float)));
       CUDA_CHECK(cudaMalloc(&d_rotations, P * 4 * sizeof(float)));
@@ -138,6 +140,7 @@ struct GaussianRasterizer::Impl {
     std::vector<float> positions(P * 3);
     std::vector<float> normals(P * 3);
     std::vector<float> sh_dc(P * 3);
+    std::vector<float> sh_rest(P * 45);
     std::vector<float> opacities(P);
     std::vector<float> scales(P * 3);
     std::vector<float> rotations(P * 4);
@@ -155,6 +158,11 @@ struct GaussianRasterizer::Impl {
       sh_dc[i * 3 + 0] = g.f_dc[0];
       sh_dc[i * 3 + 1] = g.f_dc[1];
       sh_dc[i * 3 + 2] = g.f_dc[2];
+
+      // Copy higher-order SH coefficients
+      for (int j = 0; j < 45; ++j) {
+        sh_rest[i * 45 + j] = g.f_rest[j];
+      }
 
       opacities[i] = g.opacity;
 
@@ -174,6 +182,8 @@ struct GaussianRasterizer::Impl {
     CUDA_CHECK(cudaMemcpy(d_normals, normals.data(), P * 3 * sizeof(float),
                           cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_sh_dc, sh_dc.data(), P * 3 * sizeof(float),
+                          cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_sh_rest, sh_rest.data(), P * 45 * sizeof(float),
                           cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_opacities, opacities.data(), P * sizeof(float),
                           cudaMemcpyHostToDevice));
@@ -269,16 +279,53 @@ void GaussianRasterizer::render(
     return allocateBuffer(impl_->imageBuffer, size);
   };
 
-  // Call CUDA rasterizer
-  int D = 3;  // SH degree 0 (only DC component)
-  int M = 0;  // No higher order SH
+  // Prepare complete SH data (DC + higher-order coefficients)
+  // SH format: [P, (D+1)^2, 3] where D is the degree (3 for degree-3 SH)
+  // For degree 3: (3+1)^2 = 16 coefficients per Gaussian, 3 channels = 48 floats per Gaussian
+  float* d_shs = nullptr;
+  const int sh_degree = 3;  // SH degree
+  const int sh_coeffs_per_channel = (sh_degree + 1) * (sh_degree + 1);  // 16 for degree 3
+  const int total_sh_coeffs = sh_coeffs_per_channel * 3;  // 48 per Gaussian
+  
+  CUDA_CHECK(cudaMalloc(&d_shs, P * total_sh_coeffs * sizeof(float)));
+  
+  // Combine DC and rest coefficients into single SH array
+  // Layout: [ch0_coeff0, ch0_coeff1, ..., ch0_coeff15, ch1_coeff0, ..., ch2_coeff15]
+  std::vector<float> shs_combined(P * total_sh_coeffs);
+  for (int i = 0; i < P; ++i) {
+    // Get DC and rest from device memory
+    float dc[3], rest[45];
+    CUDA_CHECK(cudaMemcpy(&dc[0], 
+                          reinterpret_cast<float*>(impl_->d_sh_dc) + i * 3, 
+                          3 * sizeof(float), 
+                          cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(&rest[0], 
+                          reinterpret_cast<float*>(impl_->d_sh_rest) + i * 45, 
+                          45 * sizeof(float), 
+                          cudaMemcpyDeviceToHost));
+    
+    // Combine: DC is coefficient 0, rest are coefficients 1-15
+    for (int ch = 0; ch < 3; ++ch) {
+      shs_combined[i * total_sh_coeffs + ch * sh_coeffs_per_channel + 0] = dc[ch];  // DC
+      for (int c = 1; c < sh_coeffs_per_channel; ++c) {
+        shs_combined[i * total_sh_coeffs + ch * sh_coeffs_per_channel + c] = rest[ch * 15 + (c - 1)];
+      }
+    }
+  }
+  
+  CUDA_CHECK(cudaMemcpy(d_shs, shs_combined.data(), P * total_sh_coeffs * sizeof(float),
+                        cudaMemcpyHostToDevice));
+
+  // Call CUDA rasterizer with full SH data
+  int D = sh_degree;  // SH degree 3
+  int M = sh_coeffs_per_channel;  // 16 coefficients per channel
 
   CudaRasterizer::Rasterizer::forward(
       geometryBufferFunc, binningBufferFunc, imageBufferFunc,
       P, D, M, bg_color, W, H,
       reinterpret_cast<float*>(impl_->d_positions),    // means3D
-      nullptr,                                         // shs (use precomp colors)
-      reinterpret_cast<float*>(impl_->d_sh_dc),        // colors_precomp
+      d_shs,                                           // shs (full spherical harmonics)
+      nullptr,                                         // colors_precomp (not using precomputed)
       reinterpret_cast<float*>(impl_->d_opacities),    // opacities
       reinterpret_cast<float*>(impl_->d_scales),       // scales
       1.0f,                                            // scale_modifier
@@ -305,6 +352,7 @@ void GaussianRasterizer::render(
   // Cleanup
   cudaFree(d_colorOutput);
   cudaFree(d_depthOutput);
+  cudaFree(d_shs);
 
   // Unmap resources
   CUDA_CHECK(cudaGraphicsUnmapResources(1, &impl_->colorTexResource, 0));

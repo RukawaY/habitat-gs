@@ -49,6 +49,15 @@ void renderGaussians(
     simpleGaussians[i].f_dc[1] = g.f_dc.y();
     simpleGaussians[i].f_dc[2] = g.f_dc.z();
     
+    // Copy higher-order SH coefficients
+    for (size_t j = 0; j < 45 && j < g.f_rest.size(); ++j) {
+      simpleGaussians[i].f_rest[j] = g.f_rest[j];
+    }
+    // Zero-fill if less than 45 coefficients
+    for (size_t j = g.f_rest.size(); j < 45; ++j) {
+      simpleGaussians[i].f_rest[j] = 0.0f;
+    }
+    
     simpleGaussians[i].opacity = g.opacity;
     
     simpleGaussians[i].scale[0] = g.scale.x();
