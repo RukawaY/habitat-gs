@@ -100,6 +100,14 @@ corrade_add_test(
 target_include_directories(GaussianImportTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 corrade_add_test(
+  GaussianRenderTest
+  GaussianRenderTest.cpp
+  LIBRARIES
+  habitat_sim
+)
+target_include_directories(GaussianRenderTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+corrade_add_test(
   GfxBatchHbaoTest
   GfxBatchHbaoTest.cpp
   LIBRARIES

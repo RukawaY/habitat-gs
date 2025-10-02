@@ -1145,6 +1145,14 @@ class ResourceManager {
       std::vector<scene::SceneNode*>* userVisNodeCache);
 
   /**
+   * @brief backend for Gaussian Splatting, for createRenderAssetInstance
+   */
+  scene::SceneNode* createRenderAssetInstanceGaussianSplatting(
+      const RenderAssetInstanceCreationInfo& creation,
+      scene::SceneNode* parent,
+      DrawableGroup* drawables);
+
+  /**
    * @brief initialize default lighting setups in the current ShaderManager
    */
   void initDefaultLightSetups();

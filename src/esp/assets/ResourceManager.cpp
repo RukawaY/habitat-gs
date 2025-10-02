@@ -81,6 +81,7 @@
 #include "GenericSemanticMeshData.h"
 #include "GaussianSplattingData.h"
 #include "GaussianSplattingImporter.h"
+#include "esp/gfx/GaussianSplattingDrawable.h"
 #include "MeshData.h"
 
 // This is to import the "resources" at runtime. When the resource is
@@ -932,6 +933,11 @@ scene::SceneNode* ResourceManager::createRenderAssetInstance(
                    "createRenderAssetInstanceVertSemantic doesn't support this",
                    nullptr);
     newNode = createSemanticRenderAssetInstance(creation, parent, drawables);
+  } else if (info.type == AssetType::GaussianSplatting) {
+    CORRADE_ASSERT(!visNodeCache,
+                   "createRenderAssetInstanceGaussianSplatting doesn't support visNodeCache",
+                   nullptr);
+    newNode = createRenderAssetInstanceGaussianSplatting(creation, parent, drawables);
   } else if (isRenderAssetGeneral(info.type) ||
              info.type == AssetType::Primitive) {
     newNode = createRenderAssetInstanceGeneralPrimitive(
@@ -1857,6 +1863,61 @@ bool ResourceManager::loadRenderAssetGaussianSplatting(const AssetInfo& info) {
 
   return true;
 }  // ResourceManager::loadRenderAssetGaussianSplatting
+
+scene::SceneNode* ResourceManager::createRenderAssetInstanceGaussianSplatting(
+    const RenderAssetInstanceCreationInfo& creation,
+    scene::SceneNode* parent,
+    DrawableGroup* drawables) {
+  CORRADE_INTERNAL_ASSERT(parent);
+  CORRADE_INTERNAL_ASSERT(drawables);
+
+  auto resourceDictIter = resourceDict_.find(creation.filepath);
+  CORRADE_INTERNAL_ASSERT(resourceDictIter != resourceDict_.end());
+  const LoadedAssetData& loadedAssetData = resourceDictIter->second;
+
+  // Create a scene node for this Gaussian Splatting instance
+  scene::SceneNode& instanceRoot = parent->createChild();
+  
+  // Apply scale if specified
+  if (creation.scale) {
+    instanceRoot.setScaling(*creation.scale);
+  }
+
+  // Transform based on root transformation
+  instanceRoot.MagnumObject::setTransformation(
+      loadedAssetData.meshMetaData.root.transformFromLocalToParent);
+
+  // Get the Gaussian Splatting data
+  int meshStart = loadedAssetData.meshMetaData.meshIndex.first;
+  auto* baseMesh = meshes_.at(meshStart).get();
+  auto* gaussianData = dynamic_cast<GaussianSplattingData*>(baseMesh);
+  
+  CORRADE_INTERNAL_ASSERT(gaussianData);
+
+  // Create drawable configuration
+  gfx::DrawableConfiguration drawableConfig{
+      creation.lightSetupKey,              // lightSetup Key
+      "",                                   // material key (not used for GS)
+      ObjectInstanceShaderType::Phong,     // shader type (placeholder)
+      drawables,                            // drawable group
+      nullptr,                              // no skinning data
+      nullptr,                              // Not PBR so no IBL map
+      nullptr};                             // Not PBR so no PbrShaderAttributes
+
+  // Create the Gaussian Splatting drawable
+  instanceRoot.addFeature<gfx::GaussianSplattingDrawable>(
+      gaussianData,      // Gaussian data
+      drawableConfig);   // drawable configuration
+
+  // Update drawable count
+  drawableCountAndNumFaces_.first += 1;
+
+  ESP_DEBUG() << "Created Gaussian Splatting render asset instance for"
+              << creation.filepath << "with"
+              << gaussianData->getGaussianCount() << "Gaussians";
+
+  return &instanceRoot;
+}  // ResourceManager::createRenderAssetInstanceGaussianSplatting
 
 scene::SceneNode* ResourceManager::createRenderAssetInstanceGeneralPrimitive(
     const RenderAssetInstanceCreationInfo& creation,

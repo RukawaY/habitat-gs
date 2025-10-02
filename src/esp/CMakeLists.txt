@@ -236,7 +236,13 @@ set(
   gfx/PbrTextureUnit.h
   gfx/GaussianFilterShader.h
   gfx/GaussianFilterShader.cpp
+  gfx/GaussianSplattingDrawable.h
+  gfx/GaussianSplattingDrawable.cpp
 )
+
+# Note: GaussianRasterizer.h is header-only stub when not building with CUDA
+# GaussianRasterizer.cu and gaussian_rasterizer/*.cu are compiled separately
+# in the gaussian_rasterizer_kernels library when BUILD_WITH_CUDA is ON
 
 if(BUILD_WITH_BACKGROUND_RENDERER)
   list(APPEND gfx_SOURCES gfx/BackgroundRenderer.h gfx/BackgroundRenderer.cpp)
@@ -551,7 +557,29 @@ if(BUILD_WITH_CUDA)
   )
   target_compile_features(noise_model_kernels PUBLIC cxx_std_11)
 
-  target_link_libraries(habitat_sim PUBLIC noise_model_kernels ${CUDART_LIBRARY})
+  # Create library for Gaussian Splatting CUDA kernels
+  set(gaussian_rasterizer_SOURCES
+    gfx/GaussianRasterizer.cu
+    gfx/gaussian_rasterizer/rasterizer_impl.cu
+    gfx/gaussian_rasterizer/forward.cu
+    gfx/gaussian_rasterizer/backward.cu
+  )
+  add_library(gaussian_rasterizer_kernels STATIC ${gaussian_rasterizer_SOURCES})
+  set_target_properties(gaussian_rasterizer_kernels PROPERTIES CORRADE_USE_PEDANTIC_FLAGS OFF)
+  target_link_libraries(gaussian_rasterizer_kernels PUBLIC ${CUDART_LIBRARY})
+  target_include_directories(
+    gaussian_rasterizer_kernels 
+    PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  target_compile_features(gaussian_rasterizer_kernels PUBLIC cxx_std_14)
+  # Set CUDA architectures
+  set_target_properties(gaussian_rasterizer_kernels PROPERTIES
+    CUDA_SEPARABLE_COMPILATION ON
+    CUDA_ARCHITECTURES "60;70;75;80;86"
+  )
+
+  target_link_libraries(habitat_sim PUBLIC noise_model_kernels gaussian_rasterizer_kernels ${CUDART_LIBRARY})
 
   target_include_directories(
     habitat_sim PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
