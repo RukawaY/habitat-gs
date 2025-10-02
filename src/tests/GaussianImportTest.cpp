@@ -57,8 +57,8 @@ void GaussianImportTest::testGaussianSplattingImporter() {
   // 1. Provide a path to a valid 3DGS PLY file
   // 2. Uncomment and update the following code:
   
-  /*
-  std::string testFile = "path/to/your/3dgs/file.ply";
+  
+  std::string testFile = "/mnt/data/home/ziyuan/gaussian-splatting/output/d6858747-c/point_cloud/iteration_30000/point_cloud.ply";
   
   if (Cr::Utility::Path::exists(testFile)) {
     importer.doOpenFile(testFile);
@@ -81,7 +81,7 @@ void GaussianImportTest::testGaussianSplattingImporter() {
   } else {
     ESP_WARNING() << "Test 3DGS file not found, skipping file-based tests";
   }
-  */
+  
 
   ESP_DEBUG() << "GaussianSplattingImporter test completed";
 }
@@ -111,7 +111,7 @@ void GaussianImportTest::testGaussianSplattingData() {
     testSplat.f_rest[i] = 0.0f;
   }
 
-  gsData.addGaussian(testSplat);
+  gsData.addGaussian(std::move(testSplat));
 
   // Verify Gaussian was added
   CORRADE_VERIFY(gsData.getGaussianCount() == 1);
@@ -142,8 +142,8 @@ void GaussianImportTest::testGaussianSplattingResourceManager() {
   // 1. Provide a path to a valid 3DGS PLY file
   // 2. Uncomment and update the following code:
   
-  /*
-  std::string testFile = "path/to/your/3dgs/file.ply";
+  
+  std::string testFile = "/mnt/data/home/ziyuan/gaussian-splatting/output/d6858747-c/point_cloud/iteration_30000/point_cloud.ply";
   
   if (Cr::Utility::Path::exists(testFile)) {
     AssetInfo info{AssetType::GaussianSplatting, testFile};
@@ -159,7 +159,7 @@ void GaussianImportTest::testGaussianSplattingResourceManager() {
   } else {
     ESP_WARNING() << "Test 3DGS file not found, skipping ResourceManager test";
   }
-  */
+  
 
   ESP_DEBUG() << "ResourceManager 3DGS test completed";
 }

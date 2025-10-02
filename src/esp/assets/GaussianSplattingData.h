@@ -15,6 +15,8 @@
 #include "BaseMesh.h"
 #include "esp/core/Esp.h"
 
+namespace Mn = Magnum;
+
 namespace esp {
 namespace assets {
 
@@ -26,13 +28,13 @@ namespace assets {
  */
 struct GaussianSplat {
   //! Position of the Gaussian center
-  Magnum::Vector3 position;
+  Mn::Vector3 position;
 
   //! Normal vector (nx, ny, nz)
-  Magnum::Vector3 normal;
+  Mn::Vector3 normal;
 
   //! Spherical harmonics DC coefficients (RGB base color)
-  Magnum::Vector3 f_dc;  // f_dc_0, f_dc_1, f_dc_2
+  Mn::Vector3 f_dc;  // f_dc_0, f_dc_1, f_dc_2
 
   //! Spherical harmonics higher-order coefficients (45 floats for degree 3)
   //! f_rest_0 to f_rest_44
@@ -42,15 +44,35 @@ struct GaussianSplat {
   float opacity;
 
   //! Scale of the Gaussian in 3 axes
-  Magnum::Vector3 scale;  // scale_0, scale_1, scale_2
+  Mn::Vector3 scale;  // scale_0, scale_1, scale_2
 
   //! Rotation quaternion (rot_0, rot_1, rot_2, rot_3)
-  Magnum::Quaternion rotation;
+  Mn::Quaternion rotation;
 
   /**
    * @brief Default constructor
    */
   GaussianSplat() : opacity(1.0f) {}
+
+  /**
+   * @brief Move constructor (required because Array is move-only)
+   */
+  GaussianSplat(GaussianSplat&&) noexcept = default;
+
+  /**
+   * @brief Move assignment operator (required because Array is move-only)
+   */
+  GaussianSplat& operator=(GaussianSplat&&) noexcept = default;
+
+  /**
+   * @brief Deleted copy constructor (cannot copy Array)
+   */
+  GaussianSplat(const GaussianSplat&) = delete;
+
+  /**
+   * @brief Deleted copy assignment (cannot copy Array)
+   */
+  GaussianSplat& operator=(const GaussianSplat&) = delete;
 };
 
 /**
@@ -67,19 +89,19 @@ class GaussianSplattingData : public BaseMesh {
    */
   struct RenderingBuffer {
     //! Buffer containing Gaussian positions
-    Magnum::GL::Buffer positionBuffer;
+    Mn::GL::Buffer positionBuffer;
     //! Buffer containing Gaussian normals
-    Magnum::GL::Buffer normalBuffer;
+    Mn::GL::Buffer normalBuffer;
     //! Buffer containing spherical harmonics DC coefficients
-    Magnum::GL::Buffer shDCBuffer;
+    Mn::GL::Buffer shDCBuffer;
     //! Buffer containing spherical harmonics rest coefficients
-    Magnum::GL::Buffer shRestBuffer;
+    Mn::GL::Buffer shRestBuffer;
     //! Buffer containing opacity values
-    Magnum::GL::Buffer opacityBuffer;
+    Mn::GL::Buffer opacityBuffer;
     //! Buffer containing scale values
-    Magnum::GL::Buffer scaleBuffer;
+    Mn::GL::Buffer scaleBuffer;
     //! Buffer containing rotation quaternions
-    Magnum::GL::Buffer rotationBuffer;
+    Mn::GL::Buffer rotationBuffer;
   };
 
   /**
@@ -100,10 +122,10 @@ class GaussianSplattingData : public BaseMesh {
   void uploadBuffersToGPU(bool forceReload = false) override;
 
   /**
-   * @brief Add a Gaussian splat to the data.
-   * @param splat The Gaussian splat to add.
+   * @brief Add a Gaussian splat to the data (move version).
+   * @param splat The Gaussian splat to add (will be moved).
    */
-  void addGaussian(const GaussianSplat& splat);
+  void addGaussian(GaussianSplat&& splat);
 
   /**
    * @brief Get the number of Gaussian splats.

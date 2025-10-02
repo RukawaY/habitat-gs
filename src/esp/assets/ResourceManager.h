@@ -255,6 +255,15 @@ class ResourceManager {
                                     std::vector<CollisionMeshData>& meshGroup);
 
   /**
+   * @brief Build collision mesh group for Gaussian Splatting assets
+   * @param filename The Gaussian Splatting asset filename
+   * @param meshGroup The collision mesh group to build
+   * @return whether built successfully or not
+   */
+  bool buildGaussianCollisionMeshGroup(const std::string& filename,
+                                       std::vector<CollisionMeshData>& meshGroup);
+
+  /**
    * @brief Load/instantiate any required render and collision assets for an
    * object, if they do not already exist in @ref resourceDict_ or @ref
    * collisionMeshGroups_, respectively. Assumes valid render and collisions

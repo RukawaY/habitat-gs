@@ -38,7 +38,7 @@ option(BUILD_WITH_BULLET
 option(BUILD_WITH_BACKGROUND_RENDERER "Build Habitat-Sim with async rendering support."
        ON
 )
-option(BUILD_TEST "Build test binaries" OFF)
+option(BUILD_TEST "Build test binaries" ON)
 option(REL_BUILD_RPATH "Use a relative build rpath" OFF)
 option(USE_SYSTEM_ASSIMP "Use system Assimp instead of a bundled submodule" OFF)
 option(USE_SYSTEM_OPENEXR "Use system OpenEXR instead of a bundled submodule" OFF)

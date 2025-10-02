@@ -6,6 +6,8 @@
  */
 
 #include <Corrade/Containers/Optional.h>
+#include <Magnum/Math/Quaternion.h>
+#include <Magnum/Math/Vector3.h>
 #include <Magnum/Trade/AbstractImporter.h>
 
 #include <fstream>

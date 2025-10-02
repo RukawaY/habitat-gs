@@ -25,13 +25,13 @@ void GaussianSplattingData::uploadBuffersToGPU(bool forceReload) {
   const size_t shRestCount = getSHRestCount();
 
   // Prepare data arrays for GPU upload
-  Corrade::Containers::Array<Magnum::Vector3> positions(gaussianCount);
-  Corrade::Containers::Array<Magnum::Vector3> normals(gaussianCount);
-  Corrade::Containers::Array<Magnum::Vector3> shDC(gaussianCount);
+  Corrade::Containers::Array<Mn::Vector3> positions(gaussianCount);
+  Corrade::Containers::Array<Mn::Vector3> normals(gaussianCount);
+  Corrade::Containers::Array<Mn::Vector3> shDC(gaussianCount);
   Corrade::Containers::Array<float> shRest(gaussianCount * shRestCount);
   Corrade::Containers::Array<float> opacities(gaussianCount);
-  Corrade::Containers::Array<Magnum::Vector3> scales(gaussianCount);
-  Corrade::Containers::Array<Magnum::Quaternion> rotations(gaussianCount);
+  Corrade::Containers::Array<Mn::Vector3> scales(gaussianCount);
+  Corrade::Containers::Array<Mn::Quaternion> rotations(gaussianCount);
 
   // Copy data from Gaussians to contiguous arrays
   for (size_t i = 0; i < gaussianCount; ++i) {
@@ -51,18 +51,18 @@ void GaussianSplattingData::uploadBuffersToGPU(bool forceReload) {
 
   // Upload to GPU buffers
   renderingBuffer_->positionBuffer.setData(positions,
-                                           Magnum::GL::BufferUsage::StaticDraw);
+                                           Mn::GL::BufferUsage::StaticDraw);
   renderingBuffer_->normalBuffer.setData(normals,
-                                         Magnum::GL::BufferUsage::StaticDraw);
-  renderingBuffer_->shDCBuffer.setData(shDC, Magnum::GL::BufferUsage::StaticDraw);
+                                         Mn::GL::BufferUsage::StaticDraw);
+  renderingBuffer_->shDCBuffer.setData(shDC, Mn::GL::BufferUsage::StaticDraw);
   renderingBuffer_->shRestBuffer.setData(shRest,
-                                         Magnum::GL::BufferUsage::StaticDraw);
+                                         Mn::GL::BufferUsage::StaticDraw);
   renderingBuffer_->opacityBuffer.setData(opacities,
-                                          Magnum::GL::BufferUsage::StaticDraw);
+                                          Mn::GL::BufferUsage::StaticDraw);
   renderingBuffer_->scaleBuffer.setData(scales,
-                                        Magnum::GL::BufferUsage::StaticDraw);
+                                        Mn::GL::BufferUsage::StaticDraw);
   renderingBuffer_->rotationBuffer.setData(rotations,
-                                           Magnum::GL::BufferUsage::StaticDraw);
+                                           Mn::GL::BufferUsage::StaticDraw);
 
   buffersOnGPU_ = true;
 
@@ -70,8 +70,8 @@ void GaussianSplattingData::uploadBuffersToGPU(bool forceReload) {
               << "Gaussians to GPU with" << shRestCount << "SH rest coefficients each";
 }
 
-void GaussianSplattingData::addGaussian(const GaussianSplat& splat) {
-  gaussians_.push_back(splat);
+void GaussianSplattingData::addGaussian(GaussianSplat&& splat) {
+  gaussians_.push_back(std::move(splat));
 }
 
 }  // namespace assets

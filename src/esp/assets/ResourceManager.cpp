@@ -843,10 +843,18 @@ bool ResourceManager::loadRenderAsset(const AssetInfo& info) {
 
     if (meshSuccess) {
       // create and register the collisionMeshGroups
-      if (info.type != AssetType::Primitive) {
+      if (info.type != AssetType::Primitive && 
+          info.type != AssetType::GaussianSplatting) {
         std::vector<CollisionMeshData> meshGroup;
         CORRADE_ASSERT(buildMeshGroups(defaultInfo, meshGroup),
                        "Failed to construct collisionMeshGroups for asset"
+                           << info.filepath,
+                       false);
+      } else if (info.type == AssetType::GaussianSplatting) {
+        // For Gaussian Splatting, create collision mesh from filtered points
+        std::vector<CollisionMeshData> meshGroup;
+        CORRADE_ASSERT(buildGaussianCollisionMeshGroup(defaultInfo.filepath, meshGroup),
+                       "Failed to construct collision mesh group for Gaussian Splatting asset"
                            << info.filepath,
                        false);
       }
@@ -1020,6 +1028,108 @@ bool ResourceManager::buildStageCollisionMeshGroup(
 
   return true;
 }  // ResourceManager::buildStageCollisionMeshGroup
+
+bool ResourceManager::buildGaussianCollisionMeshGroup(
+    const std::string& filename,
+    std::vector<CollisionMeshData>& meshGroup) {
+  
+  // Check if collision mesh group already exists
+  if (collisionMeshGroups_.count(filename) > 0) {
+    return true;
+  }
+
+  // Get the loaded Gaussian Splatting data
+  auto resourceDictIter = resourceDict_.find(filename);
+  if (resourceDictIter == resourceDict_.end()) {
+    ESP_ERROR() << "Gaussian Splatting asset" << filename << "not found in resource dictionary";
+    return false;
+  }
+
+  const LoadedAssetData& loadedAssetData = resourceDictIter->second;
+  int meshStart = loadedAssetData.meshMetaData.meshIndex.first;
+  
+  auto* baseMesh = meshes_.at(meshStart).get();
+  auto* gsData = dynamic_cast<GaussianSplattingData*>(baseMesh);
+  
+  if (!gsData) {
+    ESP_ERROR() << "Asset" << filename << "is not a valid Gaussian Splatting data";
+    return false;
+  }
+
+  const auto& gaussians = gsData->getGaussians();
+  size_t gaussianCount = gaussians.size();
+
+  if (gaussianCount == 0) {
+    ESP_WARNING() << "Gaussian Splatting asset" << filename << "has no Gaussians";
+    // Create an empty collision mesh group to avoid repeated errors
+    collisionMeshGroups_.emplace(filename, meshGroup);
+    return true;
+  }
+
+  // Filter Gaussians for collision mesh
+  // Criteria: opacity > 0.5 (filter out transparent/semi-transparent)
+  const float OPACITY_THRESHOLD = 0.5f;
+  const float MIN_SCALE = 0.005f;  // Filter out very small Gaussians
+  
+  std::vector<Magnum::Vector3> filteredPositions;
+  filteredPositions.reserve(gaussianCount / 2.5);  // Estimate ~40% will pass filter
+
+  for (const auto& gaussian : gaussians) {
+    // Filter by opacity and scale
+    // NOTE: real_opacity = 1.0 / (1.0 + exp(-opacity)), real_scale = exp(scale)
+    if (1.0 / (1.0 + exp(-gaussian.opacity)) > OPACITY_THRESHOLD) {
+      // Check if Gaussian is large enough (not a tiny splat)
+      float avgScale = (exp(gaussian.scale.x()) + exp(gaussian.scale.y()) + exp(gaussian.scale.z())) / 3.0f;
+      if (avgScale > MIN_SCALE) {
+        filteredPositions.push_back(gaussian.position);
+      }
+    }
+  }
+
+  ESP_DEBUG() << "Filtered" << filteredPositions.size() << "/"
+              << gaussianCount << "Gaussians for collision mesh (opacity >"
+              << OPACITY_THRESHOLD << ")";
+
+  if (filteredPositions.empty()) {
+    ESP_WARNING() << "No Gaussians passed filtering for collision mesh in" << filename;
+    // Create an empty collision mesh group
+    collisionMeshGroups_.emplace(filename, meshGroup);
+    return true;
+  }
+
+  // Create collision mesh data
+  // For point cloud collision, we create degenerate triangles (all 3 vertices at same point)
+  // This allows Bullet to treat each point as a collision point
+  CollisionMeshData collisionMesh;
+  collisionMesh.primitive = Magnum::MeshPrimitive::Points;
+
+  // Allocate persistent storage for positions
+  auto* positionsData = new std::vector<Magnum::Vector3>(filteredPositions);
+  
+  // Create view to the data
+  collisionMesh.positions = Corrade::Containers::ArrayView<Magnum::Vector3>(
+      positionsData->data(), positionsData->size());
+
+  // For point primitive, we don't need indices, but create an identity mapping
+  // if physics engine requires it
+  auto* indicesData = new std::vector<Magnum::UnsignedInt>(filteredPositions.size());
+  for (size_t i = 0; i < filteredPositions.size(); ++i) {
+    (*indicesData)[i] = static_cast<Magnum::UnsignedInt>(i);
+  }
+  
+  collisionMesh.indices = Corrade::Containers::ArrayView<Magnum::UnsignedInt>(
+      indicesData->data(), indicesData->size());
+
+  meshGroup.push_back(std::move(collisionMesh));
+  
+  // Store the collision mesh group
+  collisionMeshGroups_.emplace(filename, std::move(meshGroup));
+
+  ESP_DEBUG() << "Created collision mesh with" << filteredPositions.size() 
+              << "points for Gaussian Splatting asset" << filename;
+
+  return true;
+}  // ResourceManager::buildGaussianCollisionMeshGroup
 
 bool ResourceManager::loadObjectMeshDataFromFile(
     const std::string& filename,
@@ -1711,7 +1821,7 @@ bool ResourceManager::loadRenderAssetGaussianSplatting(const AssetInfo& info) {
       splat.f_rest[j] = sh_rest[i][j];
     }
 
-    gaussianData->addGaussian(splat);
+    gaussianData->addGaussian(std::move(splat));
 
     // Update bounding box
     if (firstPoint) {
