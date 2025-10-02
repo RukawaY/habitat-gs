@@ -6,6 +6,7 @@
 #include "esp/gfx/Drawable.h"
 #include "esp/gfx/DrawableConfiguration.h"
 #include "esp/gfx/GaussianRasterizer.h"
+#include "esp/gfx/ShaderManager.h"
 
 namespace esp {
 namespace assets {
@@ -26,21 +27,16 @@ class GaussianSplattingDrawable : public Drawable {
    * 
    * @param node Scene node to which this drawable is attached
    * @param gaussianData Pointer to the Gaussian Splatting data
+   * @param shaderManager Reference to shader manager (for light setup)
    * @param cfg Drawable configuration
    */
   explicit GaussianSplattingDrawable(
       scene::SceneNode& node,
       assets::GaussianSplattingData* gaussianData,
+      ShaderManager& shaderManager,
       DrawableConfiguration& cfg);
 
   ~GaussianSplattingDrawable() override = default;
-
-  /**
-   * @brief Get the drawable type
-   */
-  DrawableType getDrawableType() const override {
-    return DrawableType::None;  // Custom type
-  }
 
  protected:
   /**

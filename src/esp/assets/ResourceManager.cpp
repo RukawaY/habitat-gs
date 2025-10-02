@@ -81,7 +81,9 @@
 #include "GenericSemanticMeshData.h"
 #include "GaussianSplattingData.h"
 #include "GaussianSplattingImporter.h"
+#ifdef ESP_BUILD_WITH_CUDA
 #include "esp/gfx/GaussianSplattingDrawable.h"
+#endif
 #include "MeshData.h"
 
 // This is to import the "resources" at runtime. When the resource is
@@ -934,10 +936,15 @@ scene::SceneNode* ResourceManager::createRenderAssetInstance(
                    nullptr);
     newNode = createSemanticRenderAssetInstance(creation, parent, drawables);
   } else if (info.type == AssetType::GaussianSplatting) {
+#ifdef ESP_BUILD_WITH_CUDA
     CORRADE_ASSERT(!visNodeCache,
                    "createRenderAssetInstanceGaussianSplatting doesn't support visNodeCache",
                    nullptr);
     newNode = createRenderAssetInstanceGaussianSplatting(creation, parent, drawables);
+#else
+    ESP_ERROR() << "Gaussian Splatting requires CUDA support. Please rebuild with BUILD_WITH_CUDA=ON";
+    return nullptr;
+#endif
   } else if (isRenderAssetGeneral(info.type) ||
              info.type == AssetType::Primitive) {
     newNode = createRenderAssetInstanceGeneralPrimitive(
@@ -1864,6 +1871,7 @@ bool ResourceManager::loadRenderAssetGaussianSplatting(const AssetInfo& info) {
   return true;
 }  // ResourceManager::loadRenderAssetGaussianSplatting
 
+#ifdef ESP_BUILD_WITH_CUDA
 scene::SceneNode* ResourceManager::createRenderAssetInstanceGaussianSplatting(
     const RenderAssetInstanceCreationInfo& creation,
     scene::SceneNode* parent,
@@ -1907,6 +1915,7 @@ scene::SceneNode* ResourceManager::createRenderAssetInstanceGaussianSplatting(
   // Create the Gaussian Splatting drawable
   instanceRoot.addFeature<gfx::GaussianSplattingDrawable>(
       gaussianData,      // Gaussian data
+      shaderManager_,    // shader manager
       drawableConfig);   // drawable configuration
 
   // Update drawable count
@@ -1918,6 +1927,7 @@ scene::SceneNode* ResourceManager::createRenderAssetInstanceGaussianSplatting(
 
   return &instanceRoot;
 }  // ResourceManager::createRenderAssetInstanceGaussianSplatting
+#endif  // ESP_BUILD_WITH_CUDA
 
 scene::SceneNode* ResourceManager::createRenderAssetInstanceGeneralPrimitive(
     const RenderAssetInstanceCreationInfo& creation,

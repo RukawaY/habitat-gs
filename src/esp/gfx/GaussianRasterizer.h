@@ -1,19 +1,20 @@
 #ifndef ESP_GFX_GAUSSIANRASTERIZER_H_
 #define ESP_GFX_GAUSSIANRASTERIZER_H_
 
-#include <Magnum/GL/Buffer.h>
-#include <Magnum/GL/Texture.h>
-#include <Magnum/Math/Matrix4.h>
-#include <Magnum/Math/Vector3.h>
 #include <memory>
 
-#include "esp/core/Esp.h"
-
 namespace esp {
-namespace assets {
-class GaussianSplattingData;
-}
 namespace gfx {
+
+// Simple POD struct to pass Gaussian data without Magnum types
+struct GaussianSplatSimple {
+  float position[3];
+  float normal[3];
+  float f_dc[3];
+  float opacity;
+  float scale[3];
+  float rotation[4];  // quaternion (x, y, z, w)
+};
 
 /**
  * @brief C++ wrapper for CUDA-based Gaussian Splatting rasterization
@@ -35,21 +36,29 @@ class GaussianRasterizer {
   /**
    * @brief Render Gaussian Splatting to output textures
    * 
-   * @param gaussianData The Gaussian Splatting data to render
-   * @param viewMatrix The view matrix (camera extrinsics)
-   * @param projMatrix The projection matrix (camera intrinsics)
-   * @param viewport The viewport size (width, height)
-   * @param colorTexture OpenGL texture for RGB output (GL_RGBA32F)
-   * @param depthTexture OpenGL texture for depth output (GL_R32F)
-   * @param background Background color (RGB)
+   * @param gaussians Array of Gaussian splats
+   * @param numGaussians Number of Gaussians
+   * @param viewMatrix The view matrix (camera extrinsics) - 16 float array, row-major
+   * @param projMatrix The projection matrix (camera intrinsics) - 16 float array, row-major
+   * @param width Viewport width
+   * @param height Viewport height
+   * @param colorTextureId OpenGL texture ID for RGB output (GL_RGBA32F)
+   * @param depthTextureId OpenGL texture ID for depth output (GL_R32F)
+   * @param backgroundR Background color R component
+   * @param backgroundG Background color G component
+   * @param backgroundB Background color B component
    */
-  void render(const assets::GaussianSplattingData& gaussianData,
-              const Mn::Matrix4& viewMatrix,
-              const Mn::Matrix4& projMatrix,
-              const Mn::Vector2i& viewport,
-              Mn::GL::Texture2D& colorTexture,
-              Mn::GL::Texture2D& depthTexture,
-              const Mn::Vector3& background = Mn::Vector3{0.0f, 0.0f, 0.0f});
+  void render(const GaussianSplatSimple* gaussians,
+              int numGaussians,
+              const float* viewMatrix,
+              const float* projMatrix,
+              int width,
+              int height,
+              unsigned int colorTextureId,
+              unsigned int depthTextureId,
+              float backgroundR = 0.0f,
+              float backgroundG = 0.0f,
+              float backgroundB = 0.0f);
 
  private:
   struct Impl;

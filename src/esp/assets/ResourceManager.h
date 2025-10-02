@@ -1146,11 +1146,14 @@ class ResourceManager {
 
   /**
    * @brief backend for Gaussian Splatting, for createRenderAssetInstance
+   * Only available when BUILD_WITH_CUDA is ON
    */
+#ifdef ESP_BUILD_WITH_CUDA
   scene::SceneNode* createRenderAssetInstanceGaussianSplatting(
       const RenderAssetInstanceCreationInfo& creation,
       scene::SceneNode* parent,
       DrawableGroup* drawables);
+#endif
 
   /**
    * @brief initialize default lighting setups in the current ShaderManager

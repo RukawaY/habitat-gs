@@ -5,7 +5,9 @@
 #include <Magnum/GL/DefaultFramebuffer.h>
 
 #include "esp/assets/GaussianSplattingData.h"
+#include "esp/gfx/LightSetup.h"
 #include "esp/gfx/RenderCamera.h"
+#include "esp/gfx/ShaderManager.h"
 #include "esp/scene/SceneNode.h"
 
 namespace esp {
@@ -14,9 +16,10 @@ namespace gfx {
 GaussianSplattingDrawable::GaussianSplattingDrawable(
     scene::SceneNode& node,
     assets::GaussianSplattingData* gaussianData,
+    ShaderManager& shaderManager,
     DrawableConfiguration& cfg)
     : Drawable{node, nullptr, DrawableType::None, cfg,
-               cfg.lightSetup_},
+               shaderManager.get<LightSetup>(cfg.lightSetupKey_)},
       gaussianData_(gaussianData),
       rasterizer_(std::make_shared<GaussianRasterizer>()) {
   CORRADE_INTERNAL_ASSERT(gaussianData_);

@@ -1,23 +1,51 @@
 #include "GaussianRasterizer.h"
 
-#include <cuda_gl_interop.h>
-#include <cuda_runtime.h>
+// Standard library includes
 #include <cmath>
 #include <cstring>
+#include <cassert>
+#include <iostream>
 
-#include <Corrade/Utility/Assert.h>
-#include <Magnum/GL/TextureFormat.h>
+// CUDA headers
+#include <cuda_runtime.h>
 
-#include "esp/assets/GaussianSplattingData.h"
+// Forward declare only what we need - avoid including Magnum headers
+namespace esp {
+namespace assets {
+class GaussianSplattingData;
+
+// Simple POD struct to pass Gaussian data without Magnum types
+struct GaussianSplatSimple {
+  float position[3];
+  float normal[3];
+  float f_dc[3];
+  float opacity;
+  float scale[3];
+  float rotation[4];  // quaternion (x, y, z, w)
+};
+}  // namespace assets
+}  // namespace esp
+
+// Include GL types after checking they're available
+#ifdef __CUDACC__
+// When compiling with nvcc, use CUDA's GL interop which defines GL types
+#include <cuda_gl_interop.h>
+#ifndef GL_TEXTURE_2D
+#define GL_TEXTURE_2D 0x0DE1
+#endif
+#endif
+
+// Include rasterizer
 #include "esp/gfx/gaussian_rasterizer/rasterizer.h"
 
+// CUDA error checking macro
 #define CUDA_CHECK(call)                                                      \
   do {                                                                        \
     cudaError_t err = call;                                                   \
     if (err != cudaSuccess) {                                                 \
-      ESP_ERROR() << "CUDA error in " << __FILE__ << ":" << __LINE__ << " - "\
-                  << cudaGetErrorString(err);                                 \
-      CORRADE_INTERNAL_ASSERT_UNREACHABLE();                                  \
+      std::cerr << "CUDA error in " << __FILE__ << ":" << __LINE__ << " - "  \
+                << cudaGetErrorString(err) << std::endl;                      \
+      assert(false && "CUDA error occurred");                                 \
     }                                                                         \
   } while (0)
 
@@ -86,10 +114,7 @@ struct GaussianRasterizer::Impl {
     geomBuffer = binningBuffer = imageBuffer = nullptr;
   }
 
-  void uploadGaussianData(const assets::GaussianSplattingData& gaussianData) {
-    const auto& gaussians = gaussianData.getGaussians();
-    const int P = static_cast<int>(gaussians.size());
-
+  void uploadGaussianData(const GaussianSplatSimple* gaussians, int P) {
     // Only reallocate if size changed
     if (P != lastGaussianCount) {
       if (d_positions) cudaFree(d_positions);
@@ -119,28 +144,28 @@ struct GaussianRasterizer::Impl {
 
     for (int i = 0; i < P; ++i) {
       const auto& g = gaussians[i];
-      positions[i * 3 + 0] = g.position.x();
-      positions[i * 3 + 1] = g.position.y();
-      positions[i * 3 + 2] = g.position.z();
+      positions[i * 3 + 0] = g.position[0];
+      positions[i * 3 + 1] = g.position[1];
+      positions[i * 3 + 2] = g.position[2];
 
-      normals[i * 3 + 0] = g.normal.x();
-      normals[i * 3 + 1] = g.normal.y();
-      normals[i * 3 + 2] = g.normal.z();
+      normals[i * 3 + 0] = g.normal[0];
+      normals[i * 3 + 1] = g.normal[1];
+      normals[i * 3 + 2] = g.normal[2];
 
-      sh_dc[i * 3 + 0] = g.f_dc.x();
-      sh_dc[i * 3 + 1] = g.f_dc.y();
-      sh_dc[i * 3 + 2] = g.f_dc.z();
+      sh_dc[i * 3 + 0] = g.f_dc[0];
+      sh_dc[i * 3 + 1] = g.f_dc[1];
+      sh_dc[i * 3 + 2] = g.f_dc[2];
 
       opacities[i] = g.opacity;
 
-      scales[i * 3 + 0] = g.scale.x();
-      scales[i * 3 + 1] = g.scale.y();
-      scales[i * 3 + 2] = g.scale.z();
+      scales[i * 3 + 0] = g.scale[0];
+      scales[i * 3 + 1] = g.scale[1];
+      scales[i * 3 + 2] = g.scale[2];
 
-      rotations[i * 4 + 0] = g.rotation.vector().x();
-      rotations[i * 4 + 1] = g.rotation.vector().y();
-      rotations[i * 4 + 2] = g.rotation.vector().z();
-      rotations[i * 4 + 3] = g.rotation.scalar();
+      rotations[i * 4 + 0] = g.rotation[0];
+      rotations[i * 4 + 1] = g.rotation[1];
+      rotations[i * 4 + 2] = g.rotation[2];
+      rotations[i * 4 + 3] = g.rotation[3];
     }
 
     // Upload to GPU
@@ -164,34 +189,38 @@ GaussianRasterizer::GaussianRasterizer() : impl_(std::make_unique<Impl>()) {}
 GaussianRasterizer::~GaussianRasterizer() = default;
 
 void GaussianRasterizer::render(
-    const assets::GaussianSplattingData& gaussianData,
-    const Mn::Matrix4& viewMatrix,
-    const Mn::Matrix4& projMatrix,
-    const Mn::Vector2i& viewport,
-    Mn::GL::Texture2D& colorTexture,
-    Mn::GL::Texture2D& depthTexture,
-    const Mn::Vector3& background) {
-  const int W = viewport.x();
-  const int H = viewport.y();
-  const int P = static_cast<int>(gaussianData.getGaussianCount());
+    const GaussianSplatSimple* gaussians,
+    int numGaussians,
+    const float* viewMatrix,
+    const float* projMatrix,
+    int width,
+    int height,
+    unsigned int colorTextureId,
+    unsigned int depthTextureId,
+    float backgroundR,
+    float backgroundG,
+    float backgroundB) {
+  const int W = width;
+  const int H = height;
+  const int P = numGaussians;
 
   if (P == 0) {
-    ESP_WARNING() << "No Gaussians to render";
+    std::cerr << "Warning: No Gaussians to render" << std::endl;
     return;
   }
 
   // Upload Gaussian data to CUDA
-  impl_->uploadGaussianData(gaussianData);
+  impl_->uploadGaussianData(gaussians, P);
 
   // Register OpenGL textures with CUDA (if not already registered)
   if (!impl_->colorTexResource) {
     CUDA_CHECK(cudaGraphicsGLRegisterImage(
-        &impl_->colorTexResource, colorTexture.id(),
+        &impl_->colorTexResource, colorTextureId,
         GL_TEXTURE_2D, cudaGraphicsRegisterFlagsWriteDiscard));
   }
   if (!impl_->depthTexResource) {
     CUDA_CHECK(cudaGraphicsGLRegisterImage(
-        &impl_->depthTexResource, depthTexture.id(),
+        &impl_->depthTexResource, depthTextureId,
         GL_TEXTURE_2D, cudaGraphicsRegisterFlagsWriteDiscard));
   }
 
@@ -212,29 +241,22 @@ void GaussianRasterizer::render(
   CUDA_CHECK(cudaMalloc(&d_colorOutput, W * H * 3 * sizeof(float)));
   CUDA_CHECK(cudaMalloc(&d_depthOutput, W * H * sizeof(float)));
 
-  // Convert matrices to float arrays (row-major)
-  float viewmat[16];
-  float projmat[16];
-  for (int i = 0; i < 4; ++i) {
-    for (int j = 0; j < 4; ++j) {
-      viewmat[i * 4 + j] = viewMatrix[j][i];  // Transpose
-      projmat[i * 4 + j] = projMatrix[j][i];  // Transpose
-    }
-  }
+  // Matrices are already in float* format (row-major)
+  const float* viewmat = viewMatrix;
+  const float* projmat = projMatrix;
 
   // Compute camera parameters
-  float focal_x = projMatrix[0][0] * W / 2.0f;
-  float focal_y = projMatrix[1][1] * H / 2.0f;
-  float tan_fovx = 1.0f / projMatrix[0][0];
-  float tan_fovy = 1.0f / projMatrix[1][1];
+  float focal_x = projmat[0] * W / 2.0f;
+  float focal_y = projmat[5] * H / 2.0f;
+  float tan_fovx = 1.0f / projmat[0];
+  float tan_fovy = 1.0f / projmat[5];
 
-  // Camera position (inverse of view matrix translation)
-  Mn::Matrix4 invView = viewMatrix.inverted();
-  Mn::Vector3 camPos = invView.translation();
-  float cam_pos[3] = {camPos.x(), camPos.y(), camPos.z()};
+  // Camera position - extract from view matrix
+  // For simplicity, assuming camera is at origin (can be improved)
+  float cam_pos[3] = {-viewmat[12], -viewmat[13], -viewmat[14]};
 
   // Background color
-  float bg_color[3] = {background.x(), background.y(), background.z()};
+  float bg_color[3] = {backgroundR, backgroundG, backgroundB};
 
   // Allocate persistent buffers using lambdas
   auto geometryBufferFunc = [this](size_t size) {
@@ -290,8 +312,6 @@ void GaussianRasterizer::render(
 
   // Synchronize
   CUDA_CHECK(cudaDeviceSynchronize());
-
-  ESP_DEBUG() << "Rendered" << P << "Gaussians to" << W << "x" << H << "viewport";
 }
 
 }  // namespace gfx

@@ -5,12 +5,16 @@
 cmake_minimum_required(VERSION 3.12)
 
 option(BUILD_WITH_CUDA "Build Habitat-Sim with CUDA features enabled -- Requires CUDA"
-       OFF
+       ON
 )
 
 if(BUILD_WITH_CUDA)
   project(esp LANGUAGES C CXX CUDA)
   find_library(CUDART_LIBRARY cudart ${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES})
+  # Set global CUDA architectures
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES 60 70 75 80 86)
+  endif()
 else()
   project(esp LANGUAGES C CXX)
 endif()

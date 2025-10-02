@@ -236,13 +236,18 @@ set(
   gfx/PbrTextureUnit.h
   gfx/GaussianFilterShader.h
   gfx/GaussianFilterShader.cpp
-  gfx/GaussianSplattingDrawable.h
-  gfx/GaussianSplattingDrawable.cpp
 )
 
-# Note: GaussianRasterizer.h is header-only stub when not building with CUDA
-# GaussianRasterizer.cu and gaussian_rasterizer/*.cu are compiled separately
-# in the gaussian_rasterizer_kernels library when BUILD_WITH_CUDA is ON
+# Gaussian Splatting Drawable only when CUDA is available
+if(BUILD_WITH_CUDA)
+  list(APPEND gfx_SOURCES
+    gfx/GaussianSplattingDrawable.h
+    gfx/GaussianSplattingDrawable.cpp
+    gfx/GaussianRasterizer.h
+    gfx/GaussianRasterizerWrapper.h
+    gfx/GaussianRasterizerWrapper.cpp
+  )
+endif()
 
 if(BUILD_WITH_BACKGROUND_RENDERER)
   list(APPEND gfx_SOURCES gfx/BackgroundRenderer.h gfx/BackgroundRenderer.cpp)
@@ -565,18 +570,38 @@ if(BUILD_WITH_CUDA)
     gfx/gaussian_rasterizer/backward.cu
   )
   add_library(gaussian_rasterizer_kernels STATIC ${gaussian_rasterizer_SOURCES})
-  set_target_properties(gaussian_rasterizer_kernels PROPERTIES CORRADE_USE_PEDANTIC_FLAGS OFF)
-  target_link_libraries(gaussian_rasterizer_kernels PUBLIC ${CUDART_LIBRARY})
+  
+  # Set CUDA standard and properties
+  set_target_properties(gaussian_rasterizer_kernels PROPERTIES 
+    CORRADE_USE_PEDANTIC_FLAGS OFF
+    CUDA_STANDARD 14
+    CUDA_STANDARD_REQUIRED ON
+    CUDA_SEPARABLE_COMPILATION OFF
+    CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    CUDA_ARCHITECTURES "60;70;75;80;86"
+    POSITION_INDEPENDENT_CODE ON
+    # This is critical - prevent inheriting compile options from parent
+    INTERFACE_COMPILE_OPTIONS ""
+  )
+  
+  # Only link libraries, don't inherit their compile options
+  target_link_libraries(gaussian_rasterizer_kernels 
+    PRIVATE ${CUDART_LIBRARY}
+  )
+  
   target_include_directories(
     gaussian_rasterizer_kernels 
     PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+    PUBLIC ${PROJECT_BINARY_DIR}
   )
-  target_compile_features(gaussian_rasterizer_kernels PUBLIC cxx_std_14)
-  # Set CUDA architectures
-  set_target_properties(gaussian_rasterizer_kernels PROPERTIES
-    CUDA_SEPARABLE_COMPILATION ON
-    CUDA_ARCHITECTURES "60;70;75;80;86"
+  
+  # Set minimal CUDA compile options
+  target_compile_options(gaussian_rasterizer_kernels PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:
+      --expt-relaxed-constexpr
+      --expt-extended-lambda
+    >
   )
 
   target_link_libraries(habitat_sim PUBLIC noise_model_kernels gaussian_rasterizer_kernels ${CUDART_LIBRARY})
