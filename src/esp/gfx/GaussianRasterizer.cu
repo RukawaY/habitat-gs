@@ -19,6 +19,7 @@ struct GaussianSplatSimple {
   float position[3];
   float normal[3];
   float f_dc[3];
+  float f_rest[45];  // Higher-order SH coefficients (degree 3: 15 coefficients per channel, 3 channels)
   float opacity;
   float scale[3];
   float rotation[4];  // quaternion (x, y, z, w)

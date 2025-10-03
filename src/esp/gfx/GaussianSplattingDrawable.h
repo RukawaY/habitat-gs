@@ -63,12 +63,6 @@ class GaussianSplattingDrawable : public Drawable {
   assets::GaussianSplattingData* gaussianData_;
   std::shared_ptr<GaussianRasterizer> rasterizer_;
   RenderTarget* renderTarget_;
-  
-  // Cache converted Gaussian data to avoid per-frame conversion
-  std::vector<GaussianSplatSimple> gaussiansCache_;
-  bool cacheValid_ = false;
-  
-  void updateGaussiansCache();
 };
 
 }  // namespace gfx
