@@ -205,7 +205,8 @@ void GaussianRasterizer::render(
     const float* projMatrix,
     int width,
     int height,
-    unsigned int colorTextureId,
+    unsigned int colorResourceId,
+    unsigned int colorResourceType,
     unsigned int depthTextureId,
     float backgroundR,
     float backgroundG,
@@ -222,11 +223,11 @@ void GaussianRasterizer::render(
   // Upload Gaussian data to CUDA
   impl_->uploadGaussianData(gaussians, P);
 
-  // Register OpenGL textures with CUDA (if not already registered)
+  // Register OpenGL resources with CUDA (if not already registered)
   if (!impl_->colorTexResource) {
     CUDA_CHECK(cudaGraphicsGLRegisterImage(
-        &impl_->colorTexResource, colorTextureId,
-        GL_TEXTURE_2D, cudaGraphicsRegisterFlagsWriteDiscard));
+        &impl_->colorTexResource, colorResourceId,
+        colorResourceType, cudaGraphicsRegisterFlagsWriteDiscard));
   }
   if (!impl_->depthTexResource) {
     CUDA_CHECK(cudaGraphicsGLRegisterImage(

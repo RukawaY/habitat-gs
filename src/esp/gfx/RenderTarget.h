@@ -175,6 +175,11 @@ class RenderTarget {
   Magnum::GL::Texture2D& getObjectIdTexture();
 
   /**
+   * @brief get the color renderbuffer
+   */
+  Magnum::GL::Renderbuffer& getColorRenderbuffer();
+
+  /**
    * @brief draw HBAO effect if enabled for this render target
    */
   void tryDrawHbao();

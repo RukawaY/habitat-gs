@@ -14,6 +14,8 @@ class GaussianSplattingData;
 }
 namespace gfx {
 
+class RenderTarget;
+
 /**
  * @brief Drawable for rendering 3D Gaussian Splatting via CUDA
  * 
@@ -29,12 +31,21 @@ class GaussianSplattingDrawable : public Drawable {
    * @param gaussianData Pointer to the Gaussian Splatting data
    * @param shaderManager Reference to shader manager (for light setup)
    * @param cfg Drawable configuration
+   * @param renderTarget Pointer to the RenderTarget (can be null, set later)
    */
   explicit GaussianSplattingDrawable(
       scene::SceneNode& node,
       assets::GaussianSplattingData* gaussianData,
       ShaderManager& shaderManager,
-      DrawableConfiguration& cfg);
+      DrawableConfiguration& cfg,
+      RenderTarget* renderTarget = nullptr);
+
+  /**
+   * @brief Set the RenderTarget for this drawable
+   * 
+   * @param renderTarget Pointer to the RenderTarget to use for rendering
+   */
+  void setRenderTarget(RenderTarget* renderTarget) { renderTarget_ = renderTarget; }
 
   ~GaussianSplattingDrawable() override = default;
 
@@ -51,6 +62,13 @@ class GaussianSplattingDrawable : public Drawable {
  private:
   assets::GaussianSplattingData* gaussianData_;
   std::shared_ptr<GaussianRasterizer> rasterizer_;
+  RenderTarget* renderTarget_;
+  
+  // Cache converted Gaussian data to avoid per-frame conversion
+  std::vector<GaussianSplatSimple> gaussiansCache_;
+  bool cacheValid_ = false;
+  
+  void updateGaussiansCache();
 };
 
 }  // namespace gfx

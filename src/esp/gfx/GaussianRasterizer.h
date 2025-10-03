@@ -35,7 +35,7 @@ class GaussianRasterizer {
   GaussianRasterizer& operator=(const GaussianRasterizer&) = delete;
 
   /**
-   * @brief Render Gaussian Splatting to output textures
+   * @brief Render Gaussian Splatting to output textures/renderbuffers
    * 
    * @param gaussians Array of Gaussian splats
    * @param numGaussians Number of Gaussians
@@ -43,8 +43,9 @@ class GaussianRasterizer {
    * @param projMatrix The projection matrix (camera intrinsics) - 16 float array, row-major
    * @param width Viewport width
    * @param height Viewport height
-   * @param colorTextureId OpenGL texture ID for RGB output (GL_RGBA32F)
-   * @param depthTextureId OpenGL texture ID for depth output (GL_R32F)
+   * @param colorResourceId OpenGL renderbuffer/texture ID for RGB output
+   * @param colorResourceType GL_RENDERBUFFER or GL_TEXTURE_2D
+   * @param depthTextureId OpenGL texture ID for depth output (GL_TEXTURE_2D, DepthComponent32F)
    * @param backgroundR Background color R component
    * @param backgroundG Background color G component
    * @param backgroundB Background color B component
@@ -55,7 +56,8 @@ class GaussianRasterizer {
               const float* projMatrix,
               int width,
               int height,
-              unsigned int colorTextureId,
+              unsigned int colorResourceId,
+              unsigned int colorResourceType,
               unsigned int depthTextureId,
               float backgroundR = 0.0f,
               float backgroundG = 0.0f,

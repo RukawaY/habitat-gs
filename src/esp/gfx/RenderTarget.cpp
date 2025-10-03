@@ -273,6 +273,14 @@ struct RenderTarget::Impl {
         objectIdTexture_);
     return objectIdTexture_;
   }
+  
+  Magnum::GL::Renderbuffer& getColorRenderbuffer() {
+    CORRADE_ASSERT(flags_ & Flag::RgbaAttachment,
+                   "RenderTarget::Impl::getColorRenderbuffer(): this render target "
+                   "was not created with RGBA renderbuffer enabled.",
+                   colorBuffer_);
+    return colorBuffer_;
+  }
 
 #ifdef ESP_BUILD_WITH_CUDA
   void readFrameRgbaGPU(uint8_t* devPtr) {
@@ -446,6 +454,10 @@ Mn::GL::Texture2D& RenderTarget::getDepthTexture() {
 
 Mn::GL::Texture2D& RenderTarget::getObjectIdTexture() {
   return pimpl_->getObjectIdTexture();
+}
+
+Mn::GL::Renderbuffer& RenderTarget::getColorRenderbuffer() {
+  return pimpl_->getColorRenderbuffer();
 }
 
 void RenderTarget::tryDrawHbao() {
